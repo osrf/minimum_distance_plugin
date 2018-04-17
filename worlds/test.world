@@ -53,7 +53,7 @@
 
     <plugin name="minimum_distance_plugin" filename="libminimum_distance_plugin.so">
 
-      <pair>
+      <pair name="BoxTest">
 
         <from>
           <model name="box1">
