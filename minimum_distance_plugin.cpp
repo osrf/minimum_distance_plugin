@@ -567,7 +567,9 @@ public:
     for(CollisionTest& test : collisionTests)
     {
       test.publisher =
-          node->Advertise<gazebo::msgs::Contact>(PluginName + "/" + test.name);
+          node->Advertise<gazebo::msgs::Contact>(
+            "/" + node->GetTopicNamespace() + "/"
+            + PluginName + "/" + test.name);
     }
 
     node->Subscribe<gazebo::msgs::Int, Plugin>(
