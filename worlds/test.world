@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<sdf version="1.4">
+  <world name="default">
+
+
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+
+    <model name="box1">
+      <pose>1 0 1 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.2</size>
+            </box>
+          </geometry>
+        </visual>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.2</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <model name="box2">
+      <pose>-1 0 0.1 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.2</size>
+            </box>
+          </geometry>
+        </visual>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>0.2 0.2 0.2</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <plugin name="minimum_distance_plugin" filename="libminimum_distance_plugin.so">
+
+      <pair>
+
+        <from>
+          <model name="box1">
+            <link name="link">
+              <collision>
+                <geometry>
+                  <box>
+                    <size>0.2 0.2 0.2</size>
+                  </box>
+                </geometry>
+              </collision>
+            </link>
+          </model>
+        </from>
+
+        <to>
+          <model name="box2">
+            <link name="link">
+              <collision>
+                <geometry>
+                  <box>
+                    <size>0.2 0.2 0.2</size>
+                  </box>
+                </geometry>
+              </collision>
+            </link>
+          </model>
+        </to>
+
+        <range>100</range>
+
+      </pair>
+
+    </plugin>
+
+  </world>
+</sdf>

@@ -50,6 +50,11 @@ const std::string CylinderElementName = "cylinder";
 const std::string SphereElementName = "sphere";
 const std::string CapsuleElementName = "capsule";
 
+const std::string DilationElementName = "dilation";
+const std::string SizeElementName = "size";
+const std::string RadiusElementName = "radius";
+const std::string LengthElementName = "length";
+
 ///////////////////////////////////////////////
 struct CollisionObject
 {
@@ -101,7 +106,8 @@ struct CollisionTest
 
   mutable gazebo::transport::PublisherPtr publisher;
 
-  void runTest(const ccdw::Checker& checker) const
+  void runTest(const gazebo::physics::WorldPtr& world,
+               const ccdw::Checker& checker) const
   {
     if(firstRun)
     {
@@ -111,6 +117,7 @@ struct CollisionTest
       contact_cache.add_position();
       contact_cache.add_position();
       contact_cache.add_depth(std::numeric_limits<double>::infinity());
+      *contact_cache.mutable_world() = world->GetName();
     }
 
     for(const CollisionObject& from : fromObjects)
@@ -119,24 +126,35 @@ struct CollisionTest
     for(const CollisionObject& to : toObjects)
       to.update_tf();
 
-    ccdw::Report minReport;
-    minReport.distance = std::numeric_limits<ccd_real_t>::infinity();
+    ccdw::Report closestReport;
+    // ccdw::Report::distance represents penetration distance. Negative
+    // penetration distance is equivalent to separation distance. Therefore,
+    // negative infinity means the objects are infinitely separated. We will
+    // look for the Report whose cddw::Report::distance value is **highest**
+    // because that corresponds to the most amount of penetration, i.e. the
+    // closest distance between objects.
+    closestReport.distance = -std::numeric_limits<ccd_real_t>::infinity();
 
     for(const CollisionObject& from : fromObjects)
     {
       for(const CollisionObject& to : toObjects)
       {
         ccdw::Report report;
-        checker.separate(report, &from.tf, &to.tf, range);
+        checker.penetration(report, &from.tf, &to.tf, range);
 
-        if(report.distance < minReport.distance)
-          minReport = report;
+        // As mentioned above, we want the report whose ccdw::Report::distance
+        // value is the **highest**.
+        if(closestReport.distance < report.distance)
+          closestReport = report;
       }
     }
 
-    *contact_cache.mutable_position(0) = convertToMsg(minReport.pos1);
-    *contact_cache.mutable_position(1) = convertToMsg(minReport.pos2);
-    *contact_cache.mutable_depth()->Mutable(0) = minReport.distance;
+    *contact_cache.mutable_position(0) = convertToMsg(closestReport.pos1);
+    *contact_cache.mutable_position(1) = convertToMsg(closestReport.pos2);
+    *contact_cache.mutable_depth()->Mutable(0) = closestReport.distance;
+
+    gazebo::msgs::Set(contact_cache.mutable_time(),
+                      gazebo::common::Time(world->GetSimTime()));
 
     publisher->Publish(contact_cache);
   }
@@ -151,8 +169,9 @@ void checkDilation(
     std::unique_ptr<ccdw::Convex>& convex,
     const sdf::ElementPtr& element)
 {
-  if(sdf::ElementPtr dilationElem = element->GetElement("dilation"))
+  if(element->HasElement(DilationElementName))
   {
+    sdf::ElementPtr dilationElem = element->GetElement(DilationElementName);
     const double dilation = dilationElem->Get<double>();
 
     if(dilation < 0.0)
@@ -173,14 +192,15 @@ std::unique_ptr<ccdw::Convex> generateBox(
 {
   ignition::math::Vector3d dims(1.0, 1.0, 1.0);
 
-  if(sdf::ElementPtr sizeElem = boxElem->GetElement("size"))
+  if(boxElem->HasElement(SizeElementName))
   {
+    sdf::ElementPtr sizeElem = boxElem->GetElement(SizeElementName);
     dims = sizeElem->Get<ignition::math::Vector3d>();
   }
   else
   {
-    gzerr << "Missing <size> element inside of <" << BoxElementName
-          << "> element of " << PluginName << "\n";
+    gzerr << "Missing <" << SizeElementName << "> element inside of <"
+          << BoxElementName << "> element of " << PluginName << "\n";
   }
 
   std::unique_ptr<ccdw::Convex> box(
@@ -198,24 +218,26 @@ std::unique_ptr<ccdw::Convex> generateCylinder(
   double radius = 1.0;
   double length = 1.0;
 
-  if(sdf::ElementPtr radiusElem = cylElem->GetElement("radius"))
+  if(cylElem->HasElement(RadiusElementName))
   {
+    sdf::ElementPtr radiusElem = cylElem->GetElement(RadiusElementName);
     radius = radiusElem->Get<double>();
   }
   else
   {
-    gzerr << "Missing <radius> element inside of <" << CylinderElementName
-          << "> element of " << PluginName << "\n";
+    gzerr << "Missing <" << RadiusElementName << "> element inside of <"
+          << CylinderElementName << "> element of " << PluginName << "\n";
   }
 
-  if(sdf::ElementPtr lengthElem = cylElem->GetElement("length"))
+  if(cylElem->HasElement(LengthElementName))
   {
+    sdf::ElementPtr lengthElem = cylElem->GetElement(LengthElementName);
     length = lengthElem->Get<double>();
   }
   else
   {
-    gzerr << "Missing <length> element inside of <" << CylinderElementName
-          << "> element of " << PluginName << "\n";
+    gzerr << "Missing <" << LengthElementName << "> element inside of <"
+          << CylinderElementName << "> element of " << PluginName << "\n";
   }
 
   std::unique_ptr<ccdw::Convex> cylinder(
@@ -232,14 +254,15 @@ std::unique_ptr<ccdw::Convex> generateSphere(
 {
   double radius = 1.0;
 
-  if(sdf::ElementPtr radiusElem = sphereElem->GetElement("radius"))
+  if(sphereElem->HasElement(RadiusElementName))
   {
+    sdf::ElementPtr radiusElem = sphereElem->GetElement(RadiusElementName);
     radius = radiusElem->Get<double>();
   }
   else
   {
-    gzerr << "Missing <radius> element inside of <" << SphereElementName
-          << "> element of " << PluginName << "\n";
+    gzerr << "Missing <" << RadiusElementName << "> element inside of <"
+          << SphereElementName << "> element of " << PluginName << "\n";
   }
 
   return std::unique_ptr<ccdw::Convex>(ccdw::sphere(radius));
@@ -252,24 +275,26 @@ std::unique_ptr<ccdw::Convex> generateCapsule(
   double radius = 1.0;
   double length = 1.0;
 
-  if(sdf::ElementPtr radiusElem = capElem->GetElement("radius"))
+  if(capElem->HasElement(RadiusElementName))
   {
+    sdf::ElementPtr radiusElem = capElem->GetElement(RadiusElementName);
     radius = radiusElem->Get<double>();
   }
   else
   {
-    gzerr << "Missing <radius> element inside of <" << CapsuleElementName
-          << "> element of " << PluginName << "\n";
+    gzerr << "Missing <" << RadiusElementName << "> element inside of <"
+          << CapsuleElementName << "> element of " << PluginName << "\n";
   }
 
-  if(sdf::ElementPtr lengthElem = capElem->GetElement("length"))
+  if(capElem->HasElement(LengthElementName))
   {
+    sdf::ElementPtr lengthElem = capElem->GetElement(LengthElementName);
     length = lengthElem->Get<double>();
   }
   else
   {
-    gzerr << "Missing <length> element inside of <" << CapsuleElementName
-          << "> element of " << PluginName << "\n";
+    gzerr << "Missing <" << LengthElementName << "> element inside of <"
+          << CapsuleElementName << "> element of " << PluginName << "\n";
   }
 
   return std::unique_ptr<ccdw::Convex>(ccdw::capsule(length, radius));
@@ -279,7 +304,7 @@ std::unique_ptr<ccdw::Convex> generateCapsule(
 bool checkForInvalidShape(const sdf::ElementPtr& geomElem,
                           const std::string& shape)
 {
-  if(geomElem->GetElement(shape))
+  if(geomElem->HasElement(shape))
   {
     gzerr << "collision type <" << shape << "> is not supported by "
           << PluginName << "\n";
@@ -308,23 +333,27 @@ void appendCollisionObject(
   }
 
   // Return if the user has specified the <empty> element
-  if(geomElem->GetElement(EmptyElementName))
+  if(geomElem->HasElement(EmptyElementName))
     return;
 
-  if(sdf::ElementPtr boxElem = geomElem->GetElement(BoxElementName))
+  if(geomElem->HasElement(BoxElementName))
   {
+    sdf::ElementPtr boxElem = geomElem->GetElement(BoxElementName);
     object.convex = generateBox(boxElem);
   }
-  else if(sdf::ElementPtr cylElem = geomElem->GetElement(CylinderElementName))
+  else if(geomElem->HasElement(CylinderElementName))
   {
+    sdf::ElementPtr cylElem = geomElem->GetElement(CylinderElementName);
     object.convex = generateCylinder(cylElem);
   }
-  else if(sdf::ElementPtr sphereElem = geomElem->GetElement(SphereElementName))
+  else if(geomElem->HasElement(SphereElementName))
   {
+    sdf::ElementPtr sphereElem = geomElem->GetElement(SphereElementName);
     object.convex = generateSphere(sphereElem);
   }
-  else if(sdf::ElementPtr capElem = geomElem->GetElement(CapsuleElementName))
+  else if(geomElem->HasElement(CapsuleElementName))
   {
+    sdf::ElementPtr capElem = geomElem->GetElement(CapsuleElementName);
     object.convex = generateCapsule(capElem);
   }
   else
@@ -344,9 +373,11 @@ void appendCollisionObject(
     return;
   }
 
-  sdf::ElementPtr poseElem = collisionElem->GetElement(PoseElementName);
-  if(poseElem)
+  object.tf.child = object.convex.get();
+
+  if(collisionElem->HasElement(PoseElementName))
   {
+    sdf::ElementPtr poseElem = collisionElem->GetElement(PoseElementName);
     object.offset = poseElem->Get<gazebo::math::Pose>().Ign();
   }
 
@@ -372,10 +403,10 @@ void traverseLink(
   sdf::ElementPtr collisionElem = linkElem->GetFirstElement();
   while(collisionElem)
   {
-    if(collisionElem->GetName() != CollisionElementName)
-      continue;
+    if(collisionElem->GetName() == CollisionElementName)
+      appendCollisionObject(objects, link, collisionElem);
 
-    appendCollisionObject(objects, link, collisionElem);
+    collisionElem = collisionElem->GetNextElement();
   }
 }
 
@@ -397,10 +428,10 @@ void traverseModel(
   sdf::ElementPtr linkElem = modelElem->GetFirstElement();
   while(linkElem)
   {
-    if(linkElem->GetName() != LinkElementName)
-      continue;
+    if(linkElem->GetName() == LinkElementName)
+      traverseLink(objects, model, linkElem);
 
-    traverseLink(objects, model, linkElem);
+    linkElem = linkElem->GetNextElement();
   }
 
   if(objects.empty())
@@ -428,10 +459,10 @@ std::vector<CollisionObject> generateCollisionObjects(
   sdf::ElementPtr modelElem = fromOrToElem->GetFirstElement();
   while(modelElem)
   {
-    if(modelElem->GetName() != ModelElementName)
-      continue;
+    if(modelElem->GetName() == ModelElementName)
+      traverseModel(objects, world, modelElem);
 
-    traverseModel(objects, world, modelElem);
+    modelElem = modelElem->GetNextElement();
   }
 
   if(objects.empty())
@@ -443,7 +474,7 @@ std::vector<CollisionObject> generateCollisionObjects(
   return objects;
 }
 
-CollisionTest generateCollisionTest(
+void generateCollisionTest(
     std::vector<CollisionTest>& collisionTests,
     const gazebo::physics::WorldPtr& world,
     const sdf::ElementPtr& pairElem,
@@ -453,8 +484,9 @@ CollisionTest generateCollisionTest(
   test.fromObjects = generateCollisionObjects(world, pairElem, FromElementName);
   test.toObjects = generateCollisionObjects(world, pairElem, ToElementName);
 
-  if(sdf::ParamPtr nameParam = pairElem->GetAttribute("name"))
+  if(pairElem->HasAttribute("name"))
   {
+    sdf::ParamPtr nameParam = pairElem->GetAttribute("name");
     nameParam->Get<std::string>(test.name);
   }
   else
@@ -463,8 +495,9 @@ CollisionTest generateCollisionTest(
   }
 
   test.range = 10.0;
-  if(sdf::ElementPtr rangeElem = pairElem->GetElement(RangeElementName))
+  if(pairElem->HasElement(RangeElementName))
   {
+    sdf::ElementPtr rangeElem = pairElem->GetElement(RangeElementName);
     test.range = rangeElem->Get<double>();
   }
 
@@ -489,12 +522,12 @@ public:
       return;
 
     for(const CollisionTest& test : collisionTests)
-      test.runTest(checker);
+      test.runTest(world, checker);
   }
 
   void Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf) override
   {
-    const sdf::ElementPtr pairElem = _sdf->GetFirstElement();
+    sdf::ElementPtr pairElem = _sdf->GetFirstElement();
 
     std::size_t count = 0;
     while(pairElem)
@@ -506,16 +539,17 @@ public:
         continue;
       }
 
-      collisionTests.emplace_back(
-            generateCollisionTest(collisionTests, _world, pairElem, count));
+      generateCollisionTest(collisionTests, _world, pairElem, count);
 
-      pairElem->GetNextElement(PairElementName);
+      pairElem = pairElem->GetNextElement(PairElementName);
     }
 
     updateConnection = gazebo::event::Events::ConnectWorldUpdateEnd(
           [this](){ computeMinimumDistances(); });
 
     node = gazebo::transport::NodePtr(new gazebo::transport::Node);
+
+    world = _world;
   }
 
   void toggle(const boost::shared_ptr<const gazebo::msgs::Int>& request)
@@ -533,7 +567,7 @@ public:
     for(CollisionTest& test : collisionTests)
     {
       test.publisher =
-          node->Advertise<gazebo::msgs::Contacts>(PluginName + "/" + test.name);
+          node->Advertise<gazebo::msgs::Contact>(PluginName + "/" + test.name);
     }
 
     node->Subscribe<gazebo::msgs::Int, Plugin>(
@@ -551,6 +585,8 @@ private:
   std::atomic_bool computeResults;
 
   gazebo::event::ConnectionPtr updateConnection;
+
+  gazebo::physics::WorldPtr world;
 };
 
 GZ_REGISTER_WORLD_PLUGIN(Plugin)

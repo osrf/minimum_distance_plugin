@@ -9,7 +9,7 @@ find_package(gazebo 7 REQUIRED)
 
 find_package(Eigen3 REQUIRED)
 
-add_library(minimum_distance_plugin
+add_library(minimum_distance_plugin SHARED
   minimum_distance_plugin.cpp
   CCDWrapper.cpp)
 
