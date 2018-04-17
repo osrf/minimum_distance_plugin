@@ -390,6 +390,13 @@ void traverseLink(
     const ModelPtr& model,
     const sdf::ElementPtr& linkElem)
 {
+  if(!linkElem->HasAttribute("name"))
+  {
+    gzerr << "<" << LinkElementName << "> element of " << PluginName
+          << " is missing a [name] attribute!\n";
+    return;
+  }
+
   const std::string& linkName = linkElem->Get<std::string>("name");
   const LinkPtr& link = model->GetLink(linkName);
   if(!link)
@@ -416,6 +423,13 @@ void traverseModel(
     const gazebo::physics::WorldPtr& world,
     const sdf::ElementPtr& modelElem)
 {
+  if(!modelElem->HasAttribute("name"))
+  {
+    gzerr << "<" << ModelElementName << "> element of " << PluginName
+          << " is missing a [name] attribute!\n";
+    return;
+  }
+
   const std::string& modelName = modelElem->Get<std::string>("name");
   const ModelPtr& model = world->GetModel(modelName);
   if(!model)
@@ -425,6 +439,7 @@ void traverseModel(
     return;
   }
 
+  const int initialCount = static_cast<int>(objects.size());
   sdf::ElementPtr linkElem = modelElem->GetFirstElement();
   while(linkElem)
   {
@@ -434,9 +449,12 @@ void traverseModel(
     linkElem = linkElem->GetNextElement();
   }
 
-  if(objects.empty())
+  const int finalCount = static_cast<int>(objects.size());
+
+  if(finalCount - initialCount == 0)
   {
-    gzwarn << "No collision objects found for [" << modelName << "] element\n";
+    gzwarn << "No collision objects found for <model name=\"" << modelName
+           << "\"> element\n";
   }
 }
 
@@ -444,7 +462,8 @@ void traverseModel(
 std::vector<CollisionObject> generateCollisionObjects(
     const gazebo::physics::WorldPtr& world,
     const sdf::ElementPtr& pairElem,
-    const std::string& fromOrTo)
+    const std::string& fromOrTo,
+    const std::string& testName)
 {
   std::vector<CollisionObject> objects;
 
@@ -467,8 +486,9 @@ std::vector<CollisionObject> generateCollisionObjects(
 
   if(objects.empty())
   {
-    gzwarn << "<" << fromOrTo << "> element of " << PluginName
-           << " did not provide any collision geometries!\n";
+    gzwarn << "<" << fromOrTo << "> element in the [" << testName << "] pair "
+           << "of " << PluginName << " did not provide any collision "
+           << "geometries!\n";
   }
 
   return objects;
@@ -481,8 +501,6 @@ void generateCollisionTest(
     const std::size_t count)
 {
   CollisionTest test;
-  test.fromObjects = generateCollisionObjects(world, pairElem, FromElementName);
-  test.toObjects = generateCollisionObjects(world, pairElem, ToElementName);
 
   if(pairElem->HasAttribute("name"))
   {
@@ -493,6 +511,12 @@ void generateCollisionTest(
   {
     test.name = "Test" + std::to_string(count);
   }
+
+  test.fromObjects = generateCollisionObjects(
+        world, pairElem, FromElementName, test.name);
+
+  test.toObjects = generateCollisionObjects(
+        world, pairElem, ToElementName, test.name);
 
   test.range = 10.0;
   if(pairElem->HasElement(RangeElementName))
