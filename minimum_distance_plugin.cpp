@@ -578,10 +578,19 @@ public:
 
   void toggle(const boost::shared_ptr<const gazebo::msgs::Int>& request)
   {
+    if(computeResults == static_cast<bool>(request->data()))
+      return;
+
     if(request->data() != 0)
+    {
       computeResults = true;
+      gzmsg << "Toggling " << PluginName << " on\n";
+    }
     else
+    {
       computeResults = false;
+      gzmsg << "Toggling " << PluginName << " off\n";
+    }
   }
 
   void Init() override
@@ -596,8 +605,9 @@ public:
             + PluginName + "/" + test.name);
     }
 
-    node->Subscribe<gazebo::msgs::Int, Plugin>(
-          PluginName + "/toggle", &Plugin::toggle, this);
+    subscription = node->Subscribe<gazebo::msgs::Int, Plugin>(
+          "/" + node->GetTopicNamespace() + "/"
+          + PluginName + "/toggle", &Plugin::toggle, this);
   }
 
 private:
@@ -607,6 +617,8 @@ private:
   ccdw::Checker checker;
 
   gazebo::transport::NodePtr node;
+
+  gazebo::transport::SubscriberPtr subscription;
 
   std::atomic_bool computeResults;
 
