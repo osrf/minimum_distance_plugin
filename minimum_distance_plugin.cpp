@@ -57,6 +57,9 @@ struct CollisionObject
   LinkPtr link;
   ignition::math::Pose3d offset;
 
+  CollisionObject() = default;
+  CollisionObject(CollisionObject&&) = default;
+
   mutable ccdw::TransformedConvex tf;
 
   void update_tf() const
@@ -75,6 +78,17 @@ struct CollisionObject
 };
 
 ///////////////////////////////////////////////
+gazebo::msgs::Vector3d convertToMsg(const ccdw::vec3& from)
+{
+  gazebo::msgs::Vector3d result;
+  result.set_x(from.x());
+  result.set_y(from.y());
+  result.set_z(from.z());
+
+  return result;
+}
+
+///////////////////////////////////////////////
 struct CollisionTest
 {
   std::string name;
@@ -82,15 +96,31 @@ struct CollisionTest
   std::vector<CollisionObject> toObjects;
   double range;
 
-  gazebo::transport::PublisherPtr publisher;
+  CollisionTest() = default;
+  CollisionTest(CollisionTest&&) = default;
+
+  mutable gazebo::transport::PublisherPtr publisher;
 
   void runTest(const ccdw::Checker& checker) const
   {
+    if(firstRun)
+    {
+      firstRun = false;
+      contact_cache.set_collision1(name + "/from");
+      contact_cache.set_collision2(name + "/to");
+      contact_cache.add_position();
+      contact_cache.add_position();
+      contact_cache.add_depth(std::numeric_limits<double>::infinity());
+    }
+
     for(const CollisionObject& from : fromObjects)
       from.update_tf();
 
     for(const CollisionObject& to : toObjects)
       to.update_tf();
+
+    ccdw::Report minReport;
+    minReport.distance = std::numeric_limits<ccd_real_t>::infinity();
 
     for(const CollisionObject& from : fromObjects)
     {
@@ -98,9 +128,22 @@ struct CollisionTest
       {
         ccdw::Report report;
         checker.separate(report, &from.tf, &to.tf, range);
+
+        if(report.distance < minReport.distance)
+          minReport = report;
       }
     }
+
+    *contact_cache.mutable_position(0) = convertToMsg(minReport.pos1);
+    *contact_cache.mutable_position(1) = convertToMsg(minReport.pos2);
+    *contact_cache.mutable_depth()->Mutable(0) = minReport.distance;
+
+    publisher->Publish(contact_cache);
   }
+
+private:
+  mutable gazebo::msgs::Contact contact_cache;
+  mutable bool firstRun = true;
 };
 
 ///////////////////////////////////////////////
@@ -401,6 +444,7 @@ std::vector<CollisionObject> generateCollisionObjects(
 }
 
 CollisionTest generateCollisionTest(
+    std::vector<CollisionTest>& collisionTests,
     const gazebo::physics::WorldPtr& world,
     const sdf::ElementPtr& pairElem,
     const std::size_t count)
@@ -424,7 +468,7 @@ CollisionTest generateCollisionTest(
     test.range = rangeElem->Get<double>();
   }
 
-  return test;
+  collisionTests.emplace_back(std::move(test));
 }
 
 
@@ -463,7 +507,7 @@ public:
       }
 
       collisionTests.emplace_back(
-            generateCollisionTest(_world, pairElem, count));
+            generateCollisionTest(collisionTests, _world, pairElem, count));
 
       pairElem->GetNextElement(PairElementName);
     }
