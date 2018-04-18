@@ -2,6 +2,8 @@
 
 This is a Gazebo "world plugin" for calculating the minimum distance between convex shapes. The convex shapes are attached to links within the simulation.
 
+:warning: The `distance` field in the `gazebo::msgs::Contact` that gets published by this plugin refers to **penetration** distance. For bodies that are separated, this value will be negative. Therefore, this plugin is actually reporting the *maximum penetration* distance (which is the negative of the *minimum separation* distance).
+
 The currently supported convex shapes include:
 
 * Box
