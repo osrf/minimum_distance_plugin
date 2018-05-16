@@ -28,6 +28,10 @@
 #include <ccd/ccd.h>
 #include <Eigen/Geometry>
 #include <iostream>
+#include <type_traits>
+
+static_assert(std::is_same<double, ccd_real_t>::value,
+    "This plugin requires libccd to be built with double precision support.");
 
 namespace ccdw {
 
