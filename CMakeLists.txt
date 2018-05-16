@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
 
 project(minimum_distance_plugin)
 
@@ -20,8 +20,11 @@ target_link_libraries(minimum_distance_plugin PRIVATE
 target_include_directories(minimum_distance_plugin PRIVATE
   ${CCD_INCLUDE_DIRS}
   ${GAZEBO_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS})
+  ${EIGEN3_INCLUDE_DIR})
 
-target_compile_features(minimum_distance_plugin PRIVATE
-  cxx_aggregate_default_initializers)
+target_compile_options(minimum_distance_plugin PRIVATE -std=c++11)
 
+install(TARGETS minimum_distance_plugin
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib/static)
