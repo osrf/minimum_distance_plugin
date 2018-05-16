@@ -1,5 +1,49 @@
 # minimum_distance_plugin
+## Installing
+This plugin is built for Ubuntu Trusty (14.04).
 
+First fetch dependencies using apt:
+
+```
+  sudo apt install gazebo7
+  sudo apt install libgazebo7-dev
+  sudo apt install libeigen3-dev
+```
+
+Second, download and install libccd 2.0
+
+```
+cd && mkdir libccd-build && cd libccd-build
+wget https://github.com/danfis/libccd/archive/v2.0.tar.gz
+tar -xzvf v2.0.tar.gz
+mkdir libccd-2.0/build && cd libccd-2.0/build
+cmake -DCCD_DOUBLE:BOOL=ON -DCMAKE_INSTALL_PREFIX=/usr/local ..
+make
+sudo make install
+```
+
+Finally download and install this plugin
+
+```
+cd && mkdir gazebo-minimum-distance-plugin-build && cd gazebo-minimum-distance-plugin-build
+git clone https://github.com/osrf/minimum_distance_plugin.git
+cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
+make
+sudo make install
+```
+
+## Quick start
+
+```
+. /usr/share/gazebo/setup.sh
+export GAZEBO_PLUGIN_PATH=/usr/local/lib:$GAZEBO_PLUGIN_PATH
+export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH
+gazebo --verbose ~/gazebo-minimum-distance-plugin-build/worlds/test.world
+```
+
+Visualize the topic `/default/minimum_distance_plugin/BoxTest`
+
+## About the Plugin
 This is a Gazebo "world plugin" for calculating the minimum distance between convex shapes. The convex shapes are attached to links within the simulation.
 
 :warning: The `distance` field in the `gazebo::msgs::Contact` that gets published by this plugin refers to **penetration** distance. For bodies that are separated, this value will be negative. Therefore, this plugin is actually reporting the *maximum penetration* distance (which is the negative of the *minimum separation* distance).
