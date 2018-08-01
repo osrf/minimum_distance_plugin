@@ -70,7 +70,11 @@ struct CollisionObject
   void update_tf() const
   {
     const ignition::math::Pose3d T =
+#if GAZEBO_MAJOR_VERSION >= 8
+        (ignition::math::Matrix4d(link->WorldPose())
+#else
         (ignition::math::Matrix4d(link->GetWorldPose().Ign())
+#endif
         * ignition::math::Matrix4d(offset)).Pose();
 
     const ignition::math::Quaterniond q = T.Rot();
@@ -117,7 +121,11 @@ struct CollisionTest
       contact_cache.add_position();
       contact_cache.add_position();
       contact_cache.add_depth(std::numeric_limits<double>::infinity());
+#if GAZEBO_MAJOR_VERSION >= 8
+      *contact_cache.mutable_world() = world->Name();
+#else
       *contact_cache.mutable_world() = world->GetName();
+#endif
     }
 
     for(const CollisionObject& from : fromObjects)
@@ -154,7 +162,11 @@ struct CollisionTest
     *contact_cache.mutable_depth()->Mutable(0) = closestReport.distance;
 
     gazebo::msgs::Set(contact_cache.mutable_time(),
+#if GAZEBO_MAJOR_VERSION >= 8
+                      gazebo::common::Time(world->SimTime()));
+#else
                       gazebo::common::Time(world->GetSimTime()));
+#endif
 
     publisher->Publish(contact_cache);
   }
@@ -378,7 +390,11 @@ void appendCollisionObject(
   if(collisionElem->HasElement(PoseElementName))
   {
     sdf::ElementPtr poseElem = collisionElem->GetElement(PoseElementName);
+#if GAZEBO_MAJOR_VERSION >= 8
+    object.offset = poseElem->Get<ignition::math::Pose3d>();
+#else
     object.offset = poseElem->Get<gazebo::math::Pose>().Ign();
+#endif
   }
 
   objects.emplace_back(std::move(object));
@@ -431,7 +447,11 @@ void traverseModel(
   }
 
   const std::string& modelName = modelElem->Get<std::string>("name");
+#if GAZEBO_MAJOR_VERSION >= 8
+  const ModelPtr& model = world->ModelByName(modelName);
+#else
   const ModelPtr& model = world->GetModel(modelName);
+#endif
   if(!model)
   {
     gzerr << "Could not find a model named [" << modelName << "], requested by "
